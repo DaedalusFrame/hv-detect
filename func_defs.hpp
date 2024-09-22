@@ -5,35 +5,68 @@
 /*
 	Assembly
 */
+
+// Intrinsics
 extern "C" void _cli(void);
 extern "C" void _sti(void);
 extern "C" void _sgdt(void* gdtr);
 extern "C" void _lgdt(void* gdtr);
-extern "C" uint16_t __read_tr(void);
-extern "C" void __write_tr(uint16_t selector);
+extern "C" segment_selector __read_tr(void);
 extern "C" segment_selector __read_cs(void);
+extern "C" segment_selector __read_ss(void);
+extern "C" uint64_t __read_rsp(void);
+extern "C" void __write_tr(uint16_t selector);
+extern "C" void __write_cs(uint16_t selector);
+extern "C" void __write_ss(uint16_t selector);
 
 // Util
 extern "C" uint32_t get_proc_number(void);
+extern "C" void asm_switch_cpl(uint64_t new_cpl);
+extern "C" KPCR* __getpcr(void);
+
 
 // Detection specific assembly routines
 extern "C" void __lock_sidt(void* idtr_storage);
 extern "C" void __ss_fault_sidt(void);
 extern "C" void __gp_fault_sidt(void);
 
+extern "C" void __lock_lidt(void* idtr_storage);
+extern "C" void __ss_fault_lidt(void);
+extern "C" void __gp_fault_lidt(void);
+
 // Idt handlers
-extern "C" void asm_nmi_handler(void);
+extern "C" void asm_de_handler();
+extern "C" void asm_db_handler();
+extern "C" void asm_nmi_handler();
+extern "C" void asm_bp_handler();
+extern "C" void asm_of_handler();
+extern "C" void asm_br_handler();
+extern "C" void asm_ud_handler();
+extern "C" void asm_nm_handler();
+extern "C" void asm_df_handler();
+extern "C" void asm_ts_handler();
+extern "C" void asm_np_handler();
+extern "C" void asm_ss_handler();
+extern "C" void asm_gp_handler();
+extern "C" void asm_pf_handler();
+extern "C" void asm_mf_handler();
+extern "C" void asm_ac_handler();
+extern "C" void asm_mc_handler();
+extern "C" void asm_xm_handler();
+extern "C" void asm_ve_handler();
+extern "C" void asm_cp_handler();
 
-extern "C" void asm_ud_handler(void);
-
-extern "C" void asm_pf_handler(void);
-extern "C" void asm_gp_handler(void);
-extern "C" void asm_ss_handler(void);
-
+extern "C" void seh_handler_ecode(idt_regs_ecode_t* regs);
 
 /*
 	High level detections
 */
+
+namespace win {
+	uint64_t win_get_virtual_address(uint64_t physical_address);
+
+	uint64_t win_get_physical_address(void* virtual_address);
+};
 
 namespace idt {
 	void execute_idt_detections(void);
@@ -49,8 +82,29 @@ namespace tr {
 
 namespace safety_net {
 	bool init_safety_net(uint64_t image_base, uint64_t image_size);
+	void free_safety_net(void);
 
-	bool start_safety_net(segment_descriptor_register_64* curr_descriptor_storage);
-	void stop_safety_net(segment_descriptor_register_64* overwritten_descriptor_storage);
-	idt_regs_ecode_t* get_core_last_interrupt_record(void);
-}
+	/*
+		Note: Have to be called from cpl = 0
+	*/
+	bool start_safety_net(safety_net_t& info_storage);
+	void stop_safety_net(safety_net_t& info_storage);
+
+	/*
+		Utility that shall be called when in the safety net
+	*/
+	bool switch_cpl(uint64_t new_cpl);
+
+
+	namespace gdt {
+		void log_constructed_gdt_descriptors(void);
+	};
+
+	namespace idt {
+		idt_regs_ecode_t* get_interrupt_record(uint32_t interrupt_idx);
+		uint64_t get_interrupt_count(void);
+		void log_all_interrupts();
+
+		segment_descriptor_register_64 get_constructed_idtr(void);
+	};
+};

@@ -113,3 +113,15 @@ typedef struct {
 	uint64_t ss_selector;
 } idt_regs_ecode_t;
 #pragma push(pop)
+
+typedef struct {
+	segment_descriptor_register_64 safed_idtr;
+	segment_descriptor_register_64 safed_gdtr;
+
+	uint16_t safed_ss;
+	uint16_t safed_cs;
+	uint16_t safed_tr;
+
+	uint64_t safed_cr3;
+	uint64_t safed_cr4; // Safed and exchanged to disable smep and smap
+}safety_net_t;

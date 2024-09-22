@@ -1,23 +1,47 @@
 #include "includes.h"
 #include "func_defs.hpp"
+#include "physmem/physmem.hpp"
 
 void execute_detections(uint64_t driver_base, uint64_t driver_size) {
-	safety_net::init_safety_net(driver_base, driver_size);
-
-	log_info("IDT:");
-	idt::execute_idt_detections();
+	if (!physmem::init_physmem())
+		return;
+	
 	log_new_line();
+	log_info("Physmem inited");
 
-	log_info("GDT:");
-	gdt::execute_gdt_detections();
-	log_new_line();
+	if (!safety_net::init_safety_net(driver_base, driver_size))
+		return;
 
-	log_info("TR:");
-	tr::execute_tr_detections();
-	log_new_line();
+	log_info("Safety net inited\n");
+
+	safety_net_t storage;
+	if (!safety_net::start_safety_net(storage))
+		return;
+
+	/*
+	__try {
+		__debugbreak();
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+
+	}
+	*/
+
+	__try {
+		safety_net::switch_cpl(0);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+
+	}
+
+	safety_net::stop_safety_net(storage);
+
+	safety_net::idt::log_all_interrupts();
 }
 
 NTSTATUS driver_entry(uint64_t driver_base, uint64_t driver_size) {
+
+	log_info("Driver loaded at %p with size %p", driver_base, driver_size);
 
 	execute_detections(driver_base, driver_size);
 

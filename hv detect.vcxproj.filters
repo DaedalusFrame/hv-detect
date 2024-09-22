@@ -9,32 +9,28 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
     </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    <Filter Include="Source Files\win">
+      <UniqueIdentifier>{5c1b2101-9c48-4a6e-afd3-74bf28a537fa}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Driver Files">
-      <UniqueIdentifier>{92688237-2230-44ee-894d-0f1d0dbdbd84}</UniqueIdentifier>
+    <Filter Include="Source Files\physmem">
+      <UniqueIdentifier>{3a8a4140-528b-457f-a7e1-fc68462d3f12}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\safety_net">
+      <UniqueIdentifier>{08e02b5a-1178-494f-8cbe-8c306169c3d7}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="gdt.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="idt.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="ldt.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="tr.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="win.cpp">
+      <Filter>Source Files\win</Filter>
     </ClCompile>
     <ClCompile Include="safety_net.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\safety_net</Filter>
+    </ClCompile>
+    <ClCompile Include="physmem\physmem.cpp">
+      <Filter>Source Files\physmem</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -50,18 +46,22 @@
     <ClInclude Include="structs.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="physmem\page_table_helpers.hpp">
+      <Filter>Source Files\physmem</Filter>
+    </ClInclude>
+    <ClInclude Include="physmem\physmem.hpp">
+      <Filter>Source Files\physmem</Filter>
+    </ClInclude>
+    <ClInclude Include="physmem\physmem_structs.hpp">
+      <Filter>Source Files\physmem</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Inf Include="Template.inf">
-      <Filter>Driver Files</Filter>
-    </Inf>
-  </ItemGroup>
-  <ItemGroup>
-    <MASM Include="detect_asm.asm">
+    <MASM Include="general_asm.asm">
       <Filter>Source Files</Filter>
     </MASM>
     <MASM Include="safety_net_asm.asm">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\safety_net</Filter>
     </MASM>
   </ItemGroup>
 </Project>
