@@ -14741,6 +14741,39 @@ typedef union
  * @remarks If CPUID.80000001:EDX.[29] = 1
  */
 #define IA32_STAR                                                    0xC0000081
+typedef union {
+    struct {
+        /**
+         * @brief Reserved <b>(R)</b>
+         *
+         * [Bits 31:0] Reserved bits, must be zero.
+         */
+        uint64_t reserved : 32;
+
+        /**
+         * @brief Kernel Mode CS Selector Index <b>(R/W)</b>
+         *
+         * [Bits 47:32] The index of the code segment in the GDT to be used for kernel mode.
+         * The CS selector is derived as ((kernel_cs_index << 3) | 0).
+         * The SS selector is derived as ((kernel_cs_index << 3) + 8).
+         */
+        uint64_t kernel_cs_index : 16;
+
+        /**
+         * @brief User Mode CS Selector Index <b>(R/W)</b>
+         *
+         * [Bits 63:48] The index of the code segment in the GDT to be used for user mode.
+         * The CS selector is derived as (((user_cs_index + 16) << 3) | 3).
+         * The SS selector is derived as (((user_cs_index + 16) << 3) + 8 | 3).
+         */
+        uint64_t user_cs_index : 16;
+    };
+
+    /**
+     * @brief Full 64-bit value representing the IA32_STAR MSR.
+     */
+    uint64_t flags;
+} ia32_star_register;
 
  /**
   * @brief IA-32e Mode System Call Target Address <b>(R/W)</b>

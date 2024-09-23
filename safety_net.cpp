@@ -17,7 +17,7 @@ namespace safety_net {
 
 		constexpr segment_selector constructed_cpl0_cs = { 0, 0, 1 };
 		constexpr segment_selector constructed_cpl0_ss = { 0, 0, 2 };
-
+		
 		constexpr segment_selector constructed_cpl3_cs = { 3, 0, 3 };
 		constexpr segment_selector constructed_cpl3_ss = { 3, 0, 4 };
 
@@ -26,6 +26,8 @@ namespace safety_net {
 		constexpr uint16_t constructed_gdt_size = 7;
 
 		// Runtime data
+		bool gdt_inited = false;
+
 		void* universal_stack = 0;
 		void* interrupt_stack = 0;
 		task_state_segment_64* my_tss = 0;
@@ -235,6 +237,8 @@ namespace safety_net {
 			my_gdtr.base_address = (uint64_t)my_gdt;
 			my_gdtr.limit = (constructed_gdt_size * sizeof(segment_descriptor_32));
 
+			gdt_inited = true;
+
 			return true;
 		}
 	};
@@ -344,33 +348,12 @@ namespace safety_net {
 			Core
 		*/
 
-		// Handles exceptions that require e.g. segment switching
-		void handle_cpl_switch(idt_regs_ecode_t* record) {
-			if (record->rcx == 0) {
-				record->cs_selector = gdt::constructed_cpl0_cs.flags;
-				record->ss_selector = gdt::constructed_cpl0_ss.flags;
-			}
-			else if(record->rcx == 3) {
-				record->cs_selector = gdt::constructed_cpl3_cs.flags;
-				record->ss_selector = gdt::constructed_cpl3_ss.flags;
-			}
-
-			// No need to increment rip as int 3 + 1 will be pushed as rip ig
-		}
-
 		// Core exception handler
 		extern "C" void exception_handler(idt_regs_ecode_t* record) {
 
 			// Safe data about the interrupt for various purposes
 			safe_interrupt_record(record);
 			increase_interrupt_counter();
-
-			// Handle requested cpl switches
-			if (record->exception_vector == breakpoint &&
-				record->rax == 0xdead) {
-				handle_cpl_switch(record);
-				return;
-			}
 
 			// Just mock nmis 
 			if (record->exception_vector == nmi) {
@@ -504,6 +487,119 @@ namespace safety_net {
 		}
 	};
 
+	namespace cpl {
+		bool cpl_switching_inited = false;
+
+		// Runtime data
+		// IA32_STAR: Contains info about cs and ss for um and km
+		// IA32_LSTAR: Contains where rip will be set to after syscall
+		// IA32_FMASK: Every bit set in this will be unset in rflags after a syscall
+		uint64_t original_star = 0;
+		uint64_t original_lstar = 0;
+		uint64_t original_fmask = 0;
+
+		uint64_t constructed_star = 0;
+		uint64_t constructed_lstar = 0;
+		uint64_t constructed_fmask = 0;
+
+		/*
+			Done via sysret;
+			In here we need to ensure that we write to all necessary MSR's 
+			so that we can later restore shit
+		*/
+		bool switch_to_cpl_3(void) {
+			if (!is_safety_net_active())
+				return false;
+
+			cr4 curr_cr4;
+			curr_cr4.flags = __readcr4();
+			if (curr_cr4.smap_enable || curr_cr4.smep_enable)
+				return false;
+
+			__writemsr(IA32_STAR, constructed_star);
+			__writemsr(IA32_LSTAR, constructed_lstar);
+			__writemsr(IA32_FMASK, constructed_fmask);
+
+			__try {
+				asm_switch_to_cpl_3(); // Note: From now on you can execute all restricted instructions (e.g. wrmsr)
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER) {
+				// All is left to do here is to pray
+				__writemsr(IA32_STAR, original_star);
+				__writemsr(IA32_LSTAR, original_lstar);
+				__writemsr(IA32_FMASK, original_fmask);
+				return false; 
+			}
+
+			return true;
+		}
+
+		/*
+			Done via syscall;
+			In here we need to ensure that we restore all polluted MSR's
+		*/
+		bool switch_to_cpl_0(void) {
+
+			/*
+				We can't do shit here as we do not have access to privileged instrucitons (e.g. wrmsr)
+			*/
+
+			__try {
+				asm_switch_to_cpl_0(); // Note: From now on you can execute all privileged instructions (e.g. wrmsr)
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER) {
+				// All is left to do here is to pray
+				__writemsr(IA32_STAR, original_star);
+				__writemsr(IA32_LSTAR, original_lstar);
+				__writemsr(IA32_FMASK, original_fmask);
+				return false;
+			}
+
+			__writemsr(IA32_STAR, original_star);
+			__writemsr(IA32_LSTAR, original_lstar);
+			__writemsr(IA32_FMASK, original_fmask);
+
+			return true;
+		}
+
+		bool init_cpl_switcher(void) {
+
+			ia32_efer_register efer;
+			efer.flags = __readmsr(IA32_EFER);
+			if (!efer.syscall_enable || !efer.ia32e_mode_enable)
+				return false;
+
+			// Backup orig values
+			original_star = __readmsr(IA32_STAR);
+			original_lstar = __readmsr(IA32_LSTAR);
+			original_fmask = __readmsr(IA32_FMASK);
+
+
+			ia32_star_register star;
+			star.flags = 0;
+			star.kernel_cs_index = gdt::constructed_cpl0_cs.flags;
+			star.user_cs_index = gdt::constructed_cpl3_cs.flags;
+			constructed_star = star.flags;
+
+			constructed_lstar = (uint64_t)asm_syscall_handler;
+
+			constructed_fmask = 0;
+			
+			cpl_switching_inited = true;
+
+			log_info("Kernel");
+			log_info("CS %x SS %x", (uint16_t)((constructed_star >> 32) & ~3), (uint16_t)(((constructed_star >> 32) & ~3) + 8));
+			log_info("CS %x SS %x", gdt::constructed_cpl0_cs.flags, gdt::constructed_cpl0_ss.flags);
+			
+			log_info("UM");
+			log_info("CS %x SS %x", (uint16_t)(((constructed_star >> 48) << 3) | 3),
+				(uint16_t)(((constructed_star >> 48) << 3) + 8 | 3));
+			log_info("CS %x SS %x", gdt::constructed_cpl3_cs.flags, gdt::constructed_cpl3_ss.flags);
+
+			return true;
+		}
+	};
+
 	/*
 		Exposed API's
 	*/
@@ -560,6 +656,9 @@ namespace safety_net {
 			return false;
 
 		if (!idt::init_idt())
+			return false;
+
+		if (!cpl::init_cpl_switcher())
 			return false;
 
 		inited = true;
@@ -645,20 +744,5 @@ namespace safety_net {
 		__writecr4(info_storage.safed_cr4);
 
 		_sti();
-	}
-
-	/*
-		Utility that shall be called when in the safety net
-	*/
-	bool switch_cpl(uint64_t new_cpl) {
-		if (!is_safety_net_active())
-			return false;
-
-		if (new_cpl != 3 && new_cpl != 0)
-			return false;
-
-		asm_switch_cpl(new_cpl);
-
-		return true;
 	}
 }

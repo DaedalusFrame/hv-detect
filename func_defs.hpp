@@ -58,6 +58,11 @@ extern "C" void asm_cp_handler();
 
 extern "C" void seh_handler_ecode(idt_regs_ecode_t* regs);
 
+// Cpl switching
+extern "C" void asm_syscall_handler(void);
+extern "C" void asm_switch_to_cpl_3(void);
+extern "C" void asm_switch_to_cpl_0(void);
+
 /*
 	High level detections
 */
@@ -87,14 +92,9 @@ namespace safety_net {
 	/*
 		Note: Have to be called from cpl = 0
 	*/
+	bool is_safety_net_active();
 	bool start_safety_net(safety_net_t& info_storage);
 	void stop_safety_net(safety_net_t& info_storage);
-
-	/*
-		Utility that shall be called when in the safety net
-	*/
-	bool switch_cpl(uint64_t new_cpl);
-
 
 	namespace gdt {
 		void log_constructed_gdt_descriptors(void);
@@ -106,5 +106,20 @@ namespace safety_net {
 		void log_all_interrupts();
 
 		segment_descriptor_register_64 get_constructed_idtr(void);
+	};
+
+	namespace cpl {
+		/*
+			Done via sysret;
+			In here we need to ensure that we write to all necessary MSR's
+			so that we can later restore shit
+		*/
+		bool switch_to_cpl_3(void);
+
+		/*
+			Done via syscall;
+			In here we need to ensure that we restore all polluted MSR's
+		*/
+		bool switch_to_cpl_0(void);
 	};
 };

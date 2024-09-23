@@ -218,14 +218,41 @@ asm_cp_handler proc
 asm_cp_handler endp
 
 
-; Utility
-asm_switch_cpl proc
-    ; Key
-    mov rax, 0deadh
+; Cpl switching
+asm_syscall_handler proc
+    jmp rcx ; Basically just ignores the syscall and jumps to the next instruction
+asm_syscall_handler endp
 
-    int 3
+asm_switch_to_cpl_3 proc
+    push rcx
+    push r11
+
+    lea rcx, [continue_execution] ; RIP stored in RCX
+
+    pushfq                        ; RFLAGS stored in R11
+    pop r11
+
+    sysret 
+
+continue_execution:
+    syscall
+
+    pop r11
+    pop rcx
 
     ret
-asm_switch_cpl endp
+asm_switch_to_cpl_3 endp
+
+asm_switch_to_cpl_0 proc
+    push rcx
+    push r11
+
+    syscall ; Will be a jump to rcx basically
+
+    pop r11
+    pop rcx
+
+    ret
+asm_switch_to_cpl_0 endp
 
 end

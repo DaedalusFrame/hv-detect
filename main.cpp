@@ -27,12 +27,19 @@ void execute_detections(uint64_t driver_base, uint64_t driver_size) {
 	}
 	*/
 
-	__try {
-		safety_net::switch_cpl(0);
-	}
-	__except (EXCEPTION_EXECUTE_HANDLER) {
+	cr4 curr_cr4;
+	cr4 new_cr4;
+	curr_cr4.flags = __readcr4();
+	new_cr4.flags = curr_cr4.flags;
 
-	}
+	new_cr4.smap_enable = 0;
+	new_cr4.smep_enable = 0;
+	__writecr4(new_cr4.flags);
+
+	//safety_net::cpl::switch_to_cpl_3();
+	//safety_net::cpl::switch_to_cpl_0();
+
+	__writecr4(curr_cr4.flags);
 
 	safety_net::stop_safety_net(storage);
 
