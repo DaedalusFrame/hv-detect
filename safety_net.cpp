@@ -28,7 +28,6 @@ namespace safety_net {
 		// Runtime data
 		bool gdt_inited = false;
 
-		void* universal_stack = 0;
 		void* interrupt_stack = 0;
 		task_state_segment_64* my_tss = 0;
 		segment_descriptor_32* my_gdt = 0;
@@ -175,27 +174,18 @@ namespace safety_net {
 				return false;
 			memset(my_tss, 0, 0x1000);
 
-			universal_stack = MmAllocateContiguousMemory(KERNEL_STACK_SIZE, max_addr);
-			if (!universal_stack)
-				return false;
-			memset(universal_stack, 0, KERNEL_STACK_SIZE);
-
 			interrupt_stack = MmAllocateContiguousMemory(KERNEL_STACK_SIZE, max_addr);
 			if (!interrupt_stack)
 				return false;
 			memset(interrupt_stack, 0, KERNEL_STACK_SIZE);
 
-			my_tss->rsp0 = (uint64_t)universal_stack + KERNEL_STACK_SIZE;
-			my_tss->rsp1 = (uint64_t)universal_stack + KERNEL_STACK_SIZE;
-			my_tss->rsp2 = (uint64_t)universal_stack + KERNEL_STACK_SIZE;
-
-			my_tss->ist1 = (uint64_t)universal_stack + KERNEL_STACK_SIZE;
-			my_tss->ist2 = (uint64_t)universal_stack + KERNEL_STACK_SIZE;
-			my_tss->ist3 = (uint64_t)universal_stack + KERNEL_STACK_SIZE;
-			my_tss->ist4 = (uint64_t)universal_stack + KERNEL_STACK_SIZE;
-			my_tss->ist5 = (uint64_t)universal_stack + KERNEL_STACK_SIZE;
-			my_tss->ist6 = (uint64_t)universal_stack + KERNEL_STACK_SIZE;
-			my_tss->ist7 = (uint64_t)universal_stack + KERNEL_STACK_SIZE;
+			my_tss->ist1 = (uint64_t)interrupt_stack + KERNEL_STACK_SIZE;
+			my_tss->ist2 = (uint64_t)interrupt_stack + KERNEL_STACK_SIZE;
+			my_tss->ist3 = (uint64_t)interrupt_stack + KERNEL_STACK_SIZE;
+			my_tss->ist4 = (uint64_t)interrupt_stack + KERNEL_STACK_SIZE;
+			my_tss->ist5 = (uint64_t)interrupt_stack + KERNEL_STACK_SIZE;
+			my_tss->ist6 = (uint64_t)interrupt_stack + KERNEL_STACK_SIZE;
+			my_tss->ist7 = (uint64_t)interrupt_stack + KERNEL_STACK_SIZE;
 
 			uint64_t tss_base = reinterpret_cast<uint64_t>(my_tss);
 
@@ -272,7 +262,7 @@ namespace safety_net {
 		segment_descriptor_interrupt_gate_64* my_idt = 0;
 		segment_descriptor_register_64 my_idtr = { 0 };
 
-		uint64_t total_interrupts = 0;
+		uint64_t total_interrupts = 1;
 		idt_regs_ecode_t* context_storage = 0;
 
 		/*
@@ -281,7 +271,7 @@ namespace safety_net {
 		segment_descriptor_interrupt_gate_64 create_interrupt_gate(void* assembly_handler) {
 			segment_descriptor_interrupt_gate_64 gate = { 0 };
 
-			gate.interrupt_stack_table = 0; // Doesn't really matter which one we point it to as all point to the same; Just has to be non 0
+			gate.interrupt_stack_table = 4; // Doesn't really matter which one we point it to as all point to the same; Just has to be non 0
 			gate.segment_selector = gdt::constructed_cpl0_cs.flags;
 			gate.must_be_zero_0 = 0;
 			gate.type = SEGMENT_DESCRIPTOR_TYPE_INTERRUPT_GATE;
@@ -317,11 +307,20 @@ namespace safety_net {
 			return &context_storage[interrupt_idx];
 		}
 
+		void reset_interrupt_count(void) {
+			total_interrupts = 0;
+		}
+
 		idt_regs_ecode_t* get_core_last_interrupt_record(void) {
 			if (!idt_inited || total_interrupts >= 1000 || !total_interrupts)
 				return 0;
 
-			return &context_storage[total_interrupts - 1];
+			idt_regs_ecode_t* record = &context_storage[total_interrupts - 1];
+
+			// Done to avoid overflows
+			reset_interrupt_count();
+
+			return record;
 		}
 
 		void safe_interrupt_record(idt_regs_ecode_t* record) {
@@ -386,15 +385,15 @@ namespace safety_net {
 			safe_interrupt_record(record);
 			increase_interrupt_counter();
 
-			// Just mock nmis 
-			if (record->exception_vector == nmi) {
-				return;
-			}
-
 			// stack_segment_fault faults require the real rsp in rax (;
 			// Look into detect_asm.asm:__ss_fault_sidt for more details
 			if (record->exception_vector == stack_segment_fault) {
 				record->rsp = record->rax;
+			}
+
+			// Just mock nmis 
+			if (record->exception_vector == nmi) {
+				return;
 			}
 
 			IMAGE_DOS_HEADER* dos_header = (IMAGE_DOS_HEADER*)g_image_base;
@@ -454,6 +453,7 @@ namespace safety_net {
 					for (uint32_t entry = 0; entry < scope_table->Count; ++entry) {
 						SCOPE_RECORD* scope_record = &scope_table->ScopeRecords[entry];
 						if (potential_caller_rva >= scope_record->BeginAddress && potential_caller_rva < scope_record->EndAddress) {
+
 							record->rip = g_image_base + scope_record->JumpTarget;
 							record->rsp = (uint64_t)(stack_ptr + 1); // Point rsp to below the return address (*mostly* is the state of the stack of the caller function)
 

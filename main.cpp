@@ -23,6 +23,17 @@ void execute_detections(uint64_t driver_base, uint64_t driver_size) {
 		log_error("Failed to setup driver for supervisor access");
 		return;
 	}
+
+	/*
+	uint64_t handler_rsp = 0;
+	__try {
+		__cause_ss();
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		handler_rsp = safety_net::idt::get_core_last_interrupt_record()->rsp;
+	}
+	*/
+
 	safety_net::stop_safety_net(storage);
 
 	log_info("IDT:");

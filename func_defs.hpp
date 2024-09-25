@@ -18,6 +18,7 @@ extern "C" uint64_t __read_rsp(void);
 extern "C" void __write_tr(uint16_t selector);
 extern "C" void __write_cs(uint16_t selector);
 extern "C" void __write_ss(uint16_t selector);
+extern "C" void __cause_ss(void);
 
 // Util
 extern "C" uint32_t get_proc_number(void);
@@ -105,6 +106,7 @@ namespace safety_net {
 		idt_regs_ecode_t* get_interrupt_record(uint32_t interrupt_idx);
 		uint64_t get_interrupt_count(void);
 		void log_all_interrupts();
+		void reset_interrupt_count(void);
 
 		segment_descriptor_register_64 get_constructed_idtr(void);
 	};

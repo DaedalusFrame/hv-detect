@@ -112,7 +112,7 @@ __gp_fault_sidt endp
 
     mov rsp, 4AAAAAAAA555A555h ; Mov some non canonical value into rsp
     lidt fword ptr [rsp] ; #SS should be thrown here
-    mov rsp, rax
+    mov rsp, rax ; Restore if not
 
     ret
  __ss_fault_lidt endp
@@ -123,6 +123,15 @@ __gp_fault_lidt proc
 
     ret
 __gp_fault_lidt endp
+
+; other shit
+__cause_ss proc
+    mov rax, rsp                  ; Save current stack pointer
+    mov rsp, 4AAAAAAAA555A555h   ; Set RSP to a non-canonical value
+    mov qword ptr [rsp], rax          ; This should cause a #SS fault
+    mov rsp, rax                  ; Restore original RSP (this line won't be reached if #SS occurs)
+    ret
+__cause_ss endp
 
 get_proc_number proc
     push rbx
