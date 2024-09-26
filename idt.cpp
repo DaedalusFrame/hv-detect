@@ -3,8 +3,8 @@
 #include "physmem/physmem.hpp"
 
 namespace idt {
-    void* allocated_memory_page = 0;
-    
+    char allocated_memory_page[0x1000];
+
     /*
         List of checks:
 
@@ -15,6 +15,8 @@ namespace idt {
         detection_5 -> Compatibility mode idtr storing (TO DO!)
         detection_6 -> Non canonical address passed as memory operand
         detection_7 -> Non canonical address passed as memory operand in SS segment -> #SS
+        detection_8 -> Executing sidt with cpl = 3 but with cr4.umip = 0 && eflags.ac = 0
+        detection_9 -> Executing sidt with cpl = 3 but with cr4.umip = 1 -> #GP(0) should be caused
     */
     namespace storing {
         bool detection_1(void) {
@@ -190,6 +192,7 @@ namespace idt {
 
             if (!safety_net::cpl::switch_to_cpl_3()) {
                 __writecr4(curr_cr4.flags);
+                __writeeflags(curr_flags.flags);
                 return false;
             }
 
@@ -213,18 +216,66 @@ namespace idt {
             __writecr4(curr_cr4.flags);
             __writeeflags(curr_flags.flags);
 
-            if (hypervisor_detected)
-                return true;
-
-            return false;
+            return hypervisor_detected;
         }
 
-        bool execute_detections(void) {
+        bool detection_9(void) {
+            cr4 curr_cr4;
+            cr4 new_cr4;
+
+            curr_cr4.flags = __readcr4();
+            new_cr4.flags = curr_cr4.flags;
+
+            new_cr4.usermode_instruction_prevention = 1;
+            new_cr4.smap_enable = 0;
+            new_cr4.smep_enable = 0;
+            __writecr4(new_cr4.flags);
+
+            rflags curr_flags;
+            rflags new_flags;
+            curr_flags.flags = __readeflags();
+            new_flags.flags = curr_flags.flags;
+
+            new_flags.alignment_check_flag = 0;
+            __writeeflags(new_flags.flags);
+
+            if (!safety_net::cpl::switch_to_cpl_3()) {
+                __writecr4(curr_cr4.flags);
+                __writeeflags(curr_flags.flags);
+                return false;
+            }
+
+            bool hypervisor_detected = false;
+            segment_descriptor_register_64 idtr;
+
+            __try {
+                // This should cause an exception since we set cr4.usermode_instruction_prevention
+                __sidt(&idtr);
+                hypervisor_detected = true;
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) {
+                idt_regs_ecode_t* record = safety_net::idt::get_core_last_interrupt_record();
+                if (record->exception_vector != general_protection || record->error_code != 0)
+                    hypervisor_detected = true;
+            }
+
+            if (!safety_net::cpl::switch_to_cpl_0()) {
+                __writecr4(curr_cr4.flags);
+                __writeeflags(curr_flags.flags);
+                return false;
+            }
+
+            __writecr4(curr_cr4.flags);
+            __writeeflags(curr_flags.flags);
+
+            return hypervisor_detected;
+        }
+
+        void execute_detections(void) {
             safety_net_t storage;
             if (!safety_net::start_safety_net(storage))
-                return false;
+                return;
 
-            bool result = false;
             bool detection_1_result = detection_1();
             bool detection_2_result = detection_2();
             bool detection_3_result = detection_3();
@@ -233,12 +284,12 @@ namespace idt {
             bool detection_6_result = detection_6();
             bool detection_7_result = detection_7();
             bool detection_8_result = detection_8();
+            bool detection_9_result = detection_9();
 
             safety_net::stop_safety_net(storage);
-             
+
             if (detection_1_result) {
                 log_error_indent(2, "Failed detection 1");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 1");
@@ -246,7 +297,6 @@ namespace idt {
 
             if (detection_2_result) {
                 log_error_indent(2, "Failed detection 2");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 2");
@@ -254,7 +304,6 @@ namespace idt {
 
             if (detection_3_result) {
                 log_error_indent(2, "Failed detection 3");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 3");
@@ -262,7 +311,6 @@ namespace idt {
 
             if (detection_4_result) {
                 log_error_indent(2, "Failed detection 4");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 4");
@@ -270,7 +318,6 @@ namespace idt {
 
             if (detection_5_result) {
                 log_error_indent(2, "Failed detection 5");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 5");
@@ -278,7 +325,6 @@ namespace idt {
 
             if (detection_6_result) {
                 log_error_indent(2, "Failed detection 6");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 6");
@@ -286,7 +332,6 @@ namespace idt {
 
             if (detection_7_result) {
                 log_error_indent(2, "Failed detection 7");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 7");
@@ -294,13 +339,17 @@ namespace idt {
 
             if (detection_8_result) {
                 log_error_indent(2, "Failed detection 8");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 8");
             }
 
-            return false;
+            if (detection_9_result) {
+                log_error_indent(2, "Failed detection 9");
+            }
+            else {
+                log_success_indent(2, "Passed detection 9");
+            }
         }
     };
 
@@ -468,14 +517,6 @@ namespace idt {
             new_cr4.smep_enable = 0;
             __writecr4(new_cr4.flags);
 
-            rflags curr_flags;
-            rflags new_flags;
-            curr_flags.flags = __readeflags();
-            new_flags.flags = curr_flags.flags;
-
-            new_flags.alignment_check_flag = 0;
-            __writeeflags(new_flags.flags);
-
             if (!safety_net::cpl::switch_to_cpl_3()) {
                 __writecr4(curr_cr4.flags);
                 return false;
@@ -488,29 +529,25 @@ namespace idt {
                 hypervisor_detected = true;
             }
             __except (EXCEPTION_EXECUTE_HANDLER) {
+                idt_regs_ecode_t* record = safety_net::idt::get_core_last_interrupt_record();
+                if (record->exception_vector != general_protection || record->error_code != 0)
+                    hypervisor_detected = true;
             }
 
             if (!safety_net::cpl::switch_to_cpl_0()) {
                 __writecr4(curr_cr4.flags);
-                __writeeflags(curr_flags.flags);
                 return false;
             }
 
             __writecr4(curr_cr4.flags);
-            __writeeflags(curr_flags.flags);
-
-            if (hypervisor_detected)
-                return true;
-
-            return false;
+            return hypervisor_detected;
         }
 
-        bool execute_detections(void) {
+        void execute_detections(void) {
             safety_net_t storage;
             if (!safety_net::start_safety_net(storage))
-                return false;
+                return;
 
-            bool result = false;
             bool detection_1_result = detection_1();
             bool detection_2_result = detection_2();
             bool detection_3_result = detection_3();
@@ -524,7 +561,6 @@ namespace idt {
 
             if (detection_1_result) {
                 log_error_indent(2, "Failed detection 1");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 1");
@@ -532,7 +568,6 @@ namespace idt {
 
             if (detection_2_result) {
                 log_error_indent(2, "Failed detection 2");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 2");
@@ -540,7 +575,6 @@ namespace idt {
 
             if (detection_3_result) {
                 log_error_indent(2, "Failed detection 3");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 3");
@@ -548,7 +582,6 @@ namespace idt {
 
             if (detection_4_result) {
                 log_error_indent(2, "Failed detection 4");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 4");
@@ -556,7 +589,6 @@ namespace idt {
 
             if (detection_5_result) {
                 log_error_indent(2, "Failed detection 5");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 5");
@@ -564,7 +596,6 @@ namespace idt {
 
             if (detection_6_result) {
                 log_error_indent(2, "Failed detection 6");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 6");
@@ -572,7 +603,6 @@ namespace idt {
 
             if (detection_7_result) {
                 log_error_indent(2, "Failed detection 7");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 7");
@@ -580,31 +610,19 @@ namespace idt {
 
             if (detection_8_result) {
                 log_error_indent(2, "Failed detection 8");
-                result = true;
             }
             else {
                 log_success_indent(2, "Passed detection 8");
             }
-
-            return false;
         }
     };
 
     void execute_idt_detections(void) {
-        PHYSICAL_ADDRESS max_addr = { 0 };
-        max_addr.QuadPart = MAXULONG64;
-        allocated_memory_page = MmAllocateContiguousMemory(0x1000, max_addr);
-        if (!allocated_memory_page)
-            return;
+        memset(allocated_memory_page, 0, 0x1000);
 
         safety_net_t storage;
         if (!safety_net::start_safety_net(storage))
             return;
-
-        if (!physmem::paging_manipulation::win_set_memory_range_supervisor(allocated_memory_page, 0x1000, __readcr3(), 1)) {
-            safety_net::stop_safety_net(storage);
-            return;
-        }
 
         safety_net::stop_safety_net(storage);
 
@@ -627,7 +645,5 @@ namespace idt {
         }
 
         safety_net::stop_safety_net(storage);
-
-        MmFreeContiguousMemory(allocated_memory_page);
     }
 };

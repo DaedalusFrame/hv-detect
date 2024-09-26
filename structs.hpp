@@ -3,6 +3,8 @@
 #include <intrin.h>
 #include "ia32.hpp"
 
+#define MAX_RECORDABLE_INTERRUPTS 10
+
 #define MAX_ACCEPTABLE_TSC 500
 
 typedef union {

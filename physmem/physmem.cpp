@@ -1404,6 +1404,15 @@ namespace physmem {
 			if (!physmem::paging_manipulation::win_set_memory_range_supervisor((void*)stack_limit, stack_size, mem_cr3, 1))
 				return false;
 
+			/*
+				We need to set the interrupt record pages to supervisor to be able to access them from cpl = 3
+			*/
+			if (!physmem::remapping::ensure_memory_mapping_for_range((void*)safety_net::idt::get_interrupt_record(0), MAX_RECORDABLE_INTERRUPTS * sizeof(idt_regs_ecode_t), mem_cr3))
+				return false;
+
+			if (!physmem::paging_manipulation::win_set_memory_range_supervisor((void*)safety_net::idt::get_interrupt_record(0), MAX_RECORDABLE_INTERRUPTS * sizeof(idt_regs_ecode_t), mem_cr3, 1))
+				return false;
+
 			return true;
 		}
 	};

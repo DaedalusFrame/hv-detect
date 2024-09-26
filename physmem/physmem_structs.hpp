@@ -42,7 +42,7 @@ typedef struct {
 } page_tables_t;
 
 #define REMAPPING_TABLE_COUNT 100
-#define MAX_REMAPPINGS 200 
+#define MAX_REMAPPINGS 250 
 typedef struct {
     union {
         pdpte_64* pdpt_table[REMAPPING_TABLE_COUNT];

@@ -301,7 +301,7 @@ namespace safety_net {
 		}
 
 		idt_regs_ecode_t* get_interrupt_record(uint32_t interrupt_idx) {
-			if (!idt_inited || interrupt_idx >= 1000)
+			if (!idt_inited || interrupt_idx >= MAX_RECORDABLE_INTERRUPTS)
 				return 0;
 
 			return &context_storage[interrupt_idx];
@@ -312,7 +312,7 @@ namespace safety_net {
 		}
 
 		idt_regs_ecode_t* get_core_last_interrupt_record(void) {
-			if (!idt_inited || total_interrupts >= 1000 || !total_interrupts)
+			if (!idt_inited || total_interrupts >= MAX_RECORDABLE_INTERRUPTS || !total_interrupts)
 				return 0;
 
 			idt_regs_ecode_t* record = &context_storage[total_interrupts - 1];
@@ -324,7 +324,7 @@ namespace safety_net {
 		}
 
 		void safe_interrupt_record(idt_regs_ecode_t* record) {
-			if (!idt_inited || total_interrupts >= 1000)
+			if (!idt_inited || total_interrupts >= MAX_RECORDABLE_INTERRUPTS)
 				return;
 
 			memcpy(&context_storage[total_interrupts], record, sizeof(idt_regs_ecode_t));
@@ -507,10 +507,10 @@ namespace safety_net {
 
 			create_idt(my_idt);
 
-			context_storage = (idt_regs_ecode_t*)MmAllocateContiguousMemory(1000 * sizeof(idt_regs_ecode_t), max_addr);
+			context_storage = (idt_regs_ecode_t*)MmAllocateContiguousMemory(MAX_RECORDABLE_INTERRUPTS * sizeof(idt_regs_ecode_t), max_addr);
 			if (!context_storage)
 				return false;
-			memset(context_storage, 0, 100 * sizeof(idt_regs_ecode_t));
+			memset(context_storage, 0, MAX_RECORDABLE_INTERRUPTS * sizeof(idt_regs_ecode_t));
 
 			idt_inited = true;
 
