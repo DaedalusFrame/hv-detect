@@ -1394,7 +1394,7 @@ namespace physmem {
 			/*
 				Then prepare the stack
 			*/
-			KPCR* kpcr = __getpcr();
+			KPCR* kpcr = (KPCR*)__readmsr(IA32_GS_BASE);
 			void* curr_thread = *(void**)((uint64_t)kpcr->CurrentPrcb + 0x8);
 			uint64_t stack_base = *(uint64_t*)((uint64_t)curr_thread + 0x38);
 			uint64_t stack_limit = *(uint64_t*)((uint64_t)curr_thread + 0x30);
@@ -1417,6 +1417,8 @@ namespace physmem {
 
 			if (!physmem::paging_manipulation::win_set_memory_range_supervisor((void*)safety_net::idt::get_interrupt_record(0), MAX_RECORDABLE_INTERRUPTS * sizeof(idt_regs_ecode_t), mem_cr3, 1))
 				return false;
+
+			safety_net::set_safety_net_kpcr(kpcr);
 
 			return true;
 		}

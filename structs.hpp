@@ -127,4 +127,6 @@ typedef struct {
 
 	uint64_t safed_cr3;
 	uint64_t safed_cr4; // Safed and exchanged to disable smep and smap
+
+	KPCR* safed_kpcr;
 }safety_net_t;

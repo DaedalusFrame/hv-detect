@@ -809,7 +809,9 @@ namespace safety_net {
 		Exposed API's
 	*/
 
-	bool is_safety_net_active() {
+	KPCR* safety_net_kpcr = 0;
+
+	bool is_safety_net_active(void) {
 		if (!inited)
 			return false;
 
@@ -847,6 +849,10 @@ namespace safety_net {
 			return false;
 
 		return true;
+	}
+
+	void set_safety_net_kpcr(KPCR* kpcr) {
+		safety_net_kpcr = kpcr;
 	}
 
 	bool init_safety_net(uint64_t image_base, uint64_t image_size) {
@@ -897,6 +903,10 @@ namespace safety_net {
 			return false;
 
 		_cli();
+
+		info_storage.safed_kpcr = (KPCR*)__readmsr(IA32_GS_BASE);
+		if (safety_net_kpcr)
+			__writemsr(IA32_GS_BASE, (uint64_t)safety_net_kpcr);
 
 		// Store the old gdtr
 		_sgdt(&info_storage.safed_gdtr);
@@ -961,6 +971,8 @@ namespace safety_net {
 		__writecr3(info_storage.safed_cr3);
 
 		__writecr4(info_storage.safed_cr4);
+
+		__writemsr(IA32_GS_BASE, (uint64_t)info_storage.safed_kpcr);
 
 		_sti();
 	}

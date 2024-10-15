@@ -24,8 +24,6 @@ extern "C" void __cause_ss(void);
 // Util
 extern "C" uint32_t get_proc_number(void);
 extern "C" void asm_switch_cpl(uint64_t new_cpl);
-extern "C" KPCR* __getpcr(void);
-
 
 // Detection specific assembly routines
 extern "C" void __lock_sidt(void* idtr_storage);
@@ -97,6 +95,7 @@ namespace safety_net {
 	/*
 		Note: Have to be called from cpl = 0
 	*/
+	void set_safety_net_kpcr(KPCR* kpcr);
 	bool is_safety_net_active();
 	bool start_safety_net(safety_net_t& info_storage);
 	void stop_safety_net(safety_net_t& info_storage);

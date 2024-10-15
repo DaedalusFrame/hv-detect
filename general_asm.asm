@@ -157,9 +157,5 @@ get_proc_number proc
     ret
 get_proc_number endp
 
-__getpcr proc
-    mov rax, qword ptr gs:[18h]
-	ret
-__getpcr endp
 
 end
