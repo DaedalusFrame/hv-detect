@@ -1,7 +1,6 @@
-#include "includes.h"
-#include "func_defs.hpp"
-#include "physmem/physmem.hpp"
-
+#include "../includes/includes.h"
+#include "../includes/func_defs.hpp"
+#include "../utility/physmem/physmem.hpp"
 namespace idt {
     char allocated_memory_page[0x1000];
     segment_descriptor_register_32 comp_idt;

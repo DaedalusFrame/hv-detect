@@ -1,7 +1,7 @@
-#include "includes.h"
-#include "func_defs.hpp"
-#include "structs.hpp"
-#include "physmem/physmem.hpp"
+#include "../includes/includes.h"
+#include "../includes/func_defs.hpp"
+#include "../includes/structs.hpp"
+#include "../utility/physmem/physmem.hpp"
 
 #include <ntimage.h>
 
